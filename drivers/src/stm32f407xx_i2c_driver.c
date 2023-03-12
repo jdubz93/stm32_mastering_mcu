@@ -369,8 +369,6 @@ void I2C_Init(I2C_Handle_t *pI2CHandle)
     if(pI2CHandle->I2C_Config.I2C_SCLSpeed <= I2C_SCL_SPEED_SM)
     {
         // Standard mode
-        // pI2CHandle->pI2Cx->CCR &= ~(0x1F << I2C_CCR_CCR);
-        // pI2CHandle->pI2Cx->CCR |= (RCC_GetPCLK1Value() / (2 * pI2CHandle->I2C_Config.I2C_SCLSpeed));
         ccr_value = (RCC_GetPCLK1Value() / (2 * pI2CHandle->I2C_Config.I2C_SCLSpeed));
         temp_reg |= (ccr_value & 0xFFF);
     } else {
@@ -380,13 +378,9 @@ void I2C_Init(I2C_Handle_t *pI2CHandle)
         if(pI2CHandle->I2C_Config.I2C_FMDutyCycle == I2C_FM_DUTY_2)
         {
             // Fast mode duty cycle 2
-            // pI2CHandle->pI2Cx->CCR |= (RCC_GetPCLK1Value() / (3 * pI2CHandle->I2C_Config.I2C_SCLSpeed));
-            // pI2CHandle->pI2Cx->CCR |= (1 << I2C_CCR_DUTY); // set duty bit
             ccr_value = (RCC_GetPCLK1Value() / ( 3 * pI2CHandle->I2C_Config.I2C_SCLSpeed));
         } else {
-            // // Fast mode duty cycle 16/9
-            // pI2CHandle->pI2Cx->CCR = (RCC_GetPCLK1Value() / (25 * pI2CHandle->I2C_Config.I2C_SCLSpeed));
-            // pI2CHandle->pI2Cx->CCR &= ~(1 << I2C_CCR_DUTY); // clear duty bit
+            // Fast mode duty cycle 16/9
             ccr_value = (RCC_GetPCLK1Value() / ( 25 * pI2CHandle->I2C_Config.I2C_SCLSpeed ) );
         }
         temp_reg |= (ccr_value & 0xFFF);
@@ -399,13 +393,9 @@ void I2C_Init(I2C_Handle_t *pI2CHandle)
     if(pI2CHandle->I2C_Config.I2C_SCLSpeed <= I2C_SCL_SPEED_SM)
     {
         // Standard mode
-        // pI2CHandle->pI2Cx->TRISE &= ~(0x3F << I2C_TRISE_TRISE);
-        // pI2CHandle->pI2Cx->TRISE |= (RCC_GetPCLK1Value() / 1000000U) + 1; // divide by 1000000 to get MHz. 1000000 microseconds = 1MHz. 1000 nanoseconds = 1 microsecond.
         temp_reg |= (RCC_GetPCLK1Value() / 1000000U) + 1; // divide by 1000000 to get MHz. 1000000 microseconds = 1MHz. 1000 nanoseconds = 1 microsecond.
     } else {
         // Fast mode
-        // pI2CHandle->pI2Cx->TRISE &= ~(0x3F << I2C_TRISE_TRISE);
-        // pI2CHandle->pI2Cx->TRISE |= ((RCC_GetPCLK1Value() * 300) / 1000000000U) + 1; // 300 nanoseconds is the maximum rise time for fast mode. 1000000000 nanoseconds = 1 second.
         temp_reg |= ((RCC_GetPCLK1Value() * 300) / 1000000000U) + 1; // 300 nanoseconds is the maximum rise time for fast mode. 1000000000 nanoseconds = 1 second. 
     }
     pI2CHandle->pI2Cx->TRISE |= (temp_reg & 0x3F);
