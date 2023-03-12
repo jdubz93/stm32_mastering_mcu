@@ -31,3 +31,9 @@
 - ![img](./imgs_v2/i2c_rx_interrupt_nonblocking_exercise.png)
 - ![img](./imgs_v2/i2c_rx_interrupt_nonblocking_exercise2.png)
 #
+
+## I2C Master NACK IT
+#
+- ![img](./imgs_v2/i2c_rx_interrupt_nonblocking_nack.png)
+- ![img](./imgs_v2/i2c_rx_interrupt_nonblocking_nack2.png)
+#
