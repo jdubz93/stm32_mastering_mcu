@@ -162,7 +162,7 @@ void I2C_ApplicationEventCallback(I2C_Handle_t *pI2CHandle, uint8_t AppEv)
     {
         // This happens only during slave txing data to master
         // Master has sent the NACK. So slave should understand that master doesn't want more data
-        printf("Error: Ack failure");
+        printf("Error: Ack failure\n");
         // I2C_AppErrorHandler(pI2CHandle);
         I2C_CloseSendData(pI2CHandle);
         I2C_GenStopCond(pI2CHandle->pI2Cx);
