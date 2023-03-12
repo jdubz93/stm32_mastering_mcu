@@ -1,0 +1,12 @@
+Using semihosting
+===================
+
+1. Linker argument settings
+`-specs=rdimon.specs -lc -lrdimon`
+2. Debug configuration of your application
+monitor arm semihosting enable
+3. in main.c use below code
+``` c
+extern void initialise_monitor_handles();
+initialise_monitor_handles();
+```
