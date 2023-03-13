@@ -5,16 +5,48 @@
 #include <stdio.h>
 
 /*
- * Test NACK on I2C master receive
+ * I2C slave send data to arduino
+ * 
+ * GPIO pins used: 
+ * STM32 = PB6, PB7
+ * Arduino = A4, A5
+ * 
+ * Date: 2023-03-13
+ * Author: Josh Williams
+ * Course: Udemy Embedded Systems Masterclass
+ * 
+ * PB6 - I2C1_SCL
+ * PB7 - I2C1_SDA
+ * 
+ * Arduino Uno:
+ * A4 - SDA
+ * A5 - SCL
+ * 
+ * ADDRS:
+ * STM32F4 = 0x69
+ * ARDUINO = 0x61
+ * 
+ * Data flow summary:
+ * 
+ * master sends 0x51 to slave to read the length of data
+ * I2C_EVNT_DATA_RCV triggers
+ * 
+ * slave sends the length of data to master 
+ * I2C_EVNT_DATA_REQ
+ * 
+ * master sends 0x52 to slave to read the data
+ * I2C_EVNT_DATA_RCV triggers
+ * 
+ * slave sends the data to master
+ * I2C_EVNT_DATA_REQ
+ * 
  */
 
-/* Global Variables */
-#define MY_ADDR     0x61
-#define SLAVE_ADDR  0x66 // <- This is the address of the slave that does not exist, so we should get a NACK and handle accordingly
-I2C_Handle_t I2C1Handle;
-uint8_t pRxbuffer[32]; // holds 32 bytes
+#define SLAVE_ADDR  0x69
 
-uint8_t rxCmpl = RESET;
+/* Global Variables */
+I2C_Handle_t I2C1Handle;
+uint8_t TxBuffer[32] = "stm32 slave mode testing.."; // holds 32 bytes
 
 void delay(void) {
     for (uint32_t i = 0; i < 500000 / 2; i++);
@@ -42,7 +74,7 @@ void I2C1_GPIOInits(void) {
 void I2C1_Inits(void) {
     I2C1Handle.pI2Cx                            = I2C1;                     // I2C1 peripheral
     I2C1Handle.I2C_Config.I2C_ACKCtrl           = I2C_ACK_ENABLE;           // Not relevant for standard mode
-    I2C1Handle.I2C_Config.I2C_DeviceAdrs        = 0x61;                     // Not relevant for standard mode
+    I2C1Handle.I2C_Config.I2C_DeviceAdrs        = SLAVE_ADDR;               // Not relevant for standard mode
     I2C1Handle.I2C_Config.I2C_DeviceAdrsMode    = I2C_DEVICE_ADDRESS_7BIT;  // Not relevant for standard mode
     I2C1Handle.I2C_Config.I2C_FMDutyCycle       = I2C_FM_DUTY_2;            // Not relevant for standard mode
     I2C1Handle.I2C_Config.I2C_SCLSpeed          = I2C_SCL_SPEED_SM;         // Standard mode
@@ -63,12 +95,8 @@ void GPIO_ButtonInit(void) {
 }
 
 int main(void) {
-    // initialise_monitor_handles();
     printf("Application is running\n");
 
-    uint8_t rqst_len = 0x51;
-    uint8_t rqst_data = 0x52;
-    uint8_t recv_len;
     GPIO_ButtonInit();
 
     // I2C1 Peripheral Configuration
@@ -78,33 +106,14 @@ int main(void) {
     // I2C IRQ Configurations
     I2C_IRQInterruptConfig(IRQ_NO_I2C1_EV, ENABLE);
     I2C_IRQInterruptConfig(IRQ_NO_I2C1_ER, ENABLE);
+    I2C_SlaveEnableDisableCallbackEvents(I2C1, ENABLE);
     // I2C IRQ Priority Configurations
 
     // Enable the I2C peripheral
     I2C_PeriCtrl(I2C1, ENABLE); 
     I2C_ManageAcking(I2C1, I2C_ACK_ENABLE);
     /* PE must be set to 1 before we can enable ack bit. Otherwise the bit is cleared by hardware */
-    while (1) {
-        while (!GPIO_ReadFromInputPin(GPIOA, GPIO_PIN_NO_0));
-        delay(); // Debounce
-
-        // Send length request - 0x51
-        while(I2C_MasterSendDataIT(&I2C1Handle, &rqst_len, 1, SLAVE_ADDR, I2C_ENABLE_SR) != I2C_READY);
-        while(I2C_MasterReceiveDataIT(&I2C1Handle, &recv_len, 1, SLAVE_ADDR, I2C_ENABLE_SR) != I2C_READY);
-
-        // Send data request - 0x52
-        while(I2C_MasterSendDataIT(&I2C1Handle, &rqst_data, 1, SLAVE_ADDR, I2C_ENABLE_SR) != I2C_READY);
-        while(I2C_MasterReceiveDataIT(&I2C1Handle, pRxbuffer, recv_len, SLAVE_ADDR, I2C_DISABLE_SR) != I2C_READY);
-
-        rxCmpl = RESET;
-
-        while(rxCmpl != SET){};
-
-        pRxbuffer[recv_len+1] = '\0';
-        printf("Data : %s",pRxbuffer);
-
-        rxCmpl = RESET;
-    }
+    while(1);
 }
 
 void I2C1_EV_IRQHandler(void)
@@ -119,31 +128,48 @@ void I2C1_ER_IRQHandler (void)
 
 void I2C_ApplicationEventCallback(I2C_Handle_t *pI2CHandle, uint8_t AppEv)
 {
-    // static uint8_t commandcode = 0;
-    // static uint8_t Cnt = 0;
+    // can be global or static. 
+    // (static variables are kind of like global variables, 
+    // the memory allocated for them will not be in the stack. 
+    // The difference from global variables however,
+    // is that you cannot access these variables from outside the function.)
+    static uint8_t cmdCode = 0;
+    static uint8_t data_index = 0;
+    // static uint8_t RxBuffer[32];
 
-    if (AppEv == I2C_EVNT_TX_CMPLT)
+    if(AppEv == I2C_EVNT_DATA_REQ)
     {
-        printf("Tx is completed\n");
+        // Master is requesting data. Slave sends it.
+        if(cmdCode == 0x51)
+        {
+            // Send the length information to the master
+            I2C_SlaveSendData(pI2CHandle->pI2Cx, strlen((char*)TxBuffer));
+        }
+        else if(cmdCode == 0x52)
+        {
+            // Send the contents of TxBuffer
+            I2C_SlaveSendData(pI2CHandle->pI2Cx, TxBuffer[data_index++]);
+            printf("Data sent: %c\n", TxBuffer[data_index-1]);
+        }
+
+        // I2C_SlaveSendData(pI2CHandle->pI2Cx, TxBuffer[data_index++]);
+        // printf("Data sent: %c\n", TxBuffer[data_index-1]);
     }
-    else if (AppEv == I2C_EVNT_RX_CMPLT)
+    else if(AppEv == I2C_EVNT_DATA_RCV)
     {
-        printf("Rx is completed\n");
-        rxCmpl = SET;
+        // Master has sent some data. Slave reads it.
+        cmdCode = I2C_SlaveReceiveData(pI2CHandle->pI2Cx); /* RxBuffer cannot be a local variable because will go out of scope */
     }
-    else if (AppEv == I2C_EVNT_STOP)
+    else if(AppEv == I2C_ERROR_AF)
     {
-        printf("Stop condition is detected\n");
+        // Master has sent NACK. Slave should understand that master doesn't want more data.
+        printf("NACK received from master\n");
+        cmdCode = 0xFF; // invalidate the command code
+        data_index = 0; // reset the data index
     }
-    else if (AppEv == I2C_ERROR_AF)
+    else if(AppEv == I2C_EVNT_STOP)
     {
-        // This happens only during slave txing data to master
-        // Master has sent the NACK. So peripheral should understand that master doesn't want more data
-        printf("Error: Ack failure\n");
-        // I2C_AppErrorHandler(pI2CHandle);
-        I2C_CloseSendData(pI2CHandle);
-        I2C_GenStopCond(pI2CHandle->pI2Cx);
-        // hang in infinite loop
-        while(1);
+        // Master has ended the communication.
+        printf("Event: Stop condition detected\n");
     }
 }

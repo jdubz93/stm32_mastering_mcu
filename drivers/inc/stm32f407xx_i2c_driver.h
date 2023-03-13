@@ -143,6 +143,12 @@ extern uint8_t APB1_PreScaler[4];
 #define I2C_CR2_10BITADDR       (1 << 10)                   /* 10-bit address */
 // Detection of misplaced start or stop condition
 
+/*   TRA: Transmitter/receiver
+ *      0: Data bytes received
+ *      1: Data bytes transmitted
+ */
+#define I2C_SR2_TRA_RX 0
+#define I2C_SR2_TRA_TX 1
 
 
 /************************************************************************************************
@@ -162,10 +168,10 @@ void I2C_MasterSendData(I2C_Handle_t *pI2CHandle, uint8_t *pTxbuffer, uint32_t L
 void I2C_MasterReceiveData(I2C_Handle_t *pI2CHandle, uint8_t *pRxbuffer, uint32_t Len, uint8_t slaveAddr, uint8_t Sr);
 uint8_t I2C_MasterSendDataIT(I2C_Handle_t *pI2CHandle, uint8_t *pTxbuffer, uint32_t Len, uint8_t SlaveAddr, uint8_t Sr);
 uint8_t I2C_MasterReceiveDataIT(I2C_Handle_t *pI2CHandle, uint8_t *pRxbuffer, uint32_t Len, uint8_t SlaveAddr, uint8_t Sr);
-void I2C_SlaveSendData(I2C_RegDef_t *pI2Cx, uint8_t data);
-uint8_t I2C_SlaveReceiveData(I2C_RegDef_t *pI2Cx);
 void I2C_CloseSendData(I2C_Handle_t *pI2CHandle);
 void I2C_CloseReceiveData(I2C_Handle_t *pI2CHandle);
+void I2C_SlaveSendData(I2C_RegDef_t *pI2Cx, uint8_t data);
+uint8_t I2C_SlaveReceiveData(I2C_RegDef_t *pI2Cx);
 
 /* IRQ Configuration and ISR Handling */
 void I2C_IRQInterruptConfig(uint8_t IRQNumber, uint8_t EnOrDi);
@@ -175,7 +181,6 @@ void I2C_ER_IRQHandling(I2C_Handle_t *pI2CHandle);
 
 /* Other Peripheral Control APIs */
 void I2C_ManageAcking(I2C_RegDef_t *pI2Cx, uint8_t EnOrDi); /* Enable or disable ACKing */
-void I2C_SlaveEnableDisableCallbackEvents(I2C_RegDef_t *pI2Cx, uint8_t EnOrDi); /* Enable or disable callback events */
 uint8_t I2C_GetFlagStatus(I2C_RegDef_t *pI2Cx, uint32_t FlagName); /* Get flag status */
 void checkPeriCtrlDisabled(I2C_RegDef_t *pI2Cx); /* Check if peripheral is disabled */
 uint32_t RCC_GetPCLK1Value(void);
@@ -184,5 +189,6 @@ void I2C_GenStopCond(I2C_RegDef_t *pI2Cx); /* Generate stop condition */
 /* Application callback */
 void I2C_ApplicationEventCallback(I2C_Handle_t *pI2CHandle, uint8_t AppEv);
 void I2C_AppErrorHandler(I2C_Handle_t *pI2CHandle);
+void I2C_SlaveEnableDisableCallbackEvents(I2C_RegDef_t *pI2Cx, uint8_t EnOrDi); /* Enable or disable callback events */
 
 #endif /* STM32F407XX_I2C_DRIVER_H_ */

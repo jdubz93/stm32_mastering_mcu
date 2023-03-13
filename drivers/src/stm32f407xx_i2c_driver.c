@@ -118,7 +118,7 @@ static void I2C_MasterHandleTXEInterrupt(I2C_Handle_t *pI2CHandle)
     if(pI2CHandle->TxLen > 0)
     {
         //1. load the data into DR
-        pI2CHandle->pI2Cx->DR = *(pI2CHandle->pTxBuffer);
+        pI2CHandle->pI2Cx->DR = *pI2CHandle->pTxBuffer; // load data into DR, we dereference the pointer to get the data
 
         //2. Decrement the TxLen
         pI2CHandle->TxLen--;
@@ -586,7 +586,7 @@ uint8_t I2C_MasterSendDataIT(I2C_Handle_t *pI2CHandle, uint8_t *pTxbuffer, uint3
     if((busystate != I2C_BUSY_IN_RX) && (busystate != I2C_BUSY_IN_TX))
     {
         // 1. Save the Tx buffer address and Len information in some global variables
-        pI2CHandle->pTxBuffer = pTxbuffer;
+        pI2CHandle->pTxBuffer = pTxbuffer; // we dont dereference the pointer because we want to save the address of the buffer
         pI2CHandle->TxLen = Len;
         pI2CHandle->TxRxState = I2C_BUSY_IN_TX;
         pI2CHandle->TxSize = Len; // Txsize is used in the ISR code to manage the data transmission
@@ -626,7 +626,7 @@ uint8_t I2C_MasterReceiveDataIT(I2C_Handle_t *pI2CHandle, uint8_t *pRxbuffer, ui
     if((busystate != I2C_BUSY_IN_RX) && (busystate != I2C_BUSY_IN_TX))
     {
         // 1. Save the Rx buffer address and Len information in some global variables
-        pI2CHandle->pRxBuffer = pRxbuffer;
+        pI2CHandle->pRxBuffer = pRxbuffer; // we dont dereference pRxbuffer because we want to save the address of the buffer
         pI2CHandle->RxLen = Len;
         pI2CHandle->TxRxState = I2C_BUSY_IN_RX;
         pI2CHandle->RxSize = Len; // Rxsize is used in the ISR code to manage the data reception
@@ -648,6 +648,32 @@ uint8_t I2C_MasterReceiveDataIT(I2C_Handle_t *pI2CHandle, uint8_t *pRxbuffer, ui
 
     return busystate;
 }
+
+/**********************************************************************************************
+ * @fn                - I2C_SlaveSendData
+ * @brief             - This function sends data to the master
+ * @param[in]         - pointer to the I2C peripheral, 
+ *                                          data to send
+ * @return            - void
+ * @Note              - none
+ */
+void I2C_SlaveSendData(I2C_RegDef_t *pI2Cx, uint8_t data)
+{
+    pI2Cx->DR = data;
+}
+
+/**********************************************************************************************
+ * @fn                - I2C_SlaveReceiveData
+ * @brief             - This function receives data from the master
+ * @param[in]         - pointer to the I2C peripheral
+ * @return            - data received
+ * @Note              - none
+ */
+uint8_t I2C_SlaveReceiveData(I2C_RegDef_t *pI2Cx)
+{
+    return (uint8_t)pI2Cx->DR;
+}
+
 /**********************************************************************************************
  * @fn                - I2C_IRQInterruptConfig
  * @brief             - This function configures the IRQ number and enables or disables it
@@ -781,9 +807,23 @@ void I2C_EV_IRQHandling(I2C_Handle_t *pI2CHandle)
         // TXE flag is set
 
         // Check to make sure the device is in master mode
-        if(pI2CHandle->pI2Cx->SR[1] & (1 << I2C_SR2_MSL))
+        if(pI2CHandle->pI2Cx->SR[1] & (1 << I2C_SR2_MSL)) 
+        {
             if(pI2CHandle->TxRxState == I2C_BUSY_IN_TX)
                 I2C_MasterHandleTXEInterrupt(pI2CHandle);
+        }else {
+            // slave mode
+            
+            /*  TRA: Transmitter/receiver
+             *   0: Data bytes received
+             *   1: Data bytes transmitted
+             */
+
+            // check the device is in TX mode, should return 1
+            if(pI2CHandle->pI2Cx->SR[1] & (1 << I2C_SR2_TRA))
+                I2C_ApplicationEventCallback(pI2CHandle, I2C_EVNT_DATA_REQ);
+    
+        }
 
         // Note: if you need else make sure to add curly loops to avoid errors
     }
@@ -794,8 +834,22 @@ void I2C_EV_IRQHandling(I2C_Handle_t *pI2CHandle)
     if(tmp1 && tmp2 && tmp3) /* tmp2 is required because RXNE & TXE use both ITBUFEN & ITEVTEN before sending interrupt */
     {
         if(pI2CHandle->pI2Cx->SR[1] & (1 << I2C_SR2_MSL))
+        {
             if(pI2CHandle->TxRxState == I2C_BUSY_IN_RX)
                 I2C_MasterHandleRXNEInterrupt(pI2CHandle);
+        } else 
+        {
+            // slave mode
+
+            /*  TRA: Transmitter/receiver
+             *   0: Data bytes received
+             *   1: Data bytes transmitted
+             */
+
+            // check the device is in RX mode, should return 0
+            if(!(pI2CHandle->pI2Cx->SR[1] & (1 << I2C_SR2_TRA)))
+                I2C_ApplicationEventCallback(pI2CHandle, I2C_EVNT_DATA_RCV);
+        }
 
         // Note: if you need else make sure to add curly loops to avoid errors
     }
@@ -948,4 +1002,22 @@ void I2C_AppErrorHandler(I2C_Handle_t *pI2CHandle)
 
     // Generate the stop condition to release the SCL line
     I2C_GenStopCond(pI2CHandle->pI2Cx);
+}
+
+void I2C_SlaveEnableDisableCallbackEvents(I2C_RegDef_t *pI2Cx, uint8_t EnOrDi)
+{
+    if(EnOrDi == ENABLE)
+    {
+        // CR2 register
+        pI2Cx->CR[1] |= (1 << I2C_CR2_ITEVTEN);
+        pI2Cx->CR[1] |= (1 << I2C_CR2_ITBUFEN);
+        pI2Cx->CR[1] |= (1 << I2C_CR2_ITERREN);
+    }
+    else
+    {
+        // CR2 register
+        pI2Cx->CR[1] &= ~(1 << I2C_CR2_ITEVTEN);
+        pI2Cx->CR[1] &= ~(1 << I2C_CR2_ITBUFEN);
+        pI2Cx->CR[1] &= ~(1 << I2C_CR2_ITERREN);
+    }
 }
