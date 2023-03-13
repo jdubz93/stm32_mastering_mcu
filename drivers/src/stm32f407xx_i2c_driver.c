@@ -353,8 +353,6 @@ void I2C_Init(I2C_Handle_t *pI2CHandle)
     pI2CHandle->pI2Cx->CR[0] |= pI2CHandle->I2C_Config.I2C_ACKCtrl << I2C_CR1_ACK;
 
     // Configure FREQ
-    // pI2CHandle->pI2Cx->CR[1] &= ~(0x3F << I2C_CR2_FREQ);
-    // pI2CHandle->pI2Cx->CR[1] |= RCC_GetPCLK1Value() / (unsigned int)I2C_SCL_SPEED_SM;
 	uint32_t tempreg = 0;
 	tempreg |= RCC_GetPCLK1Value() / (unsigned int)I2C_SCL_SPEED_SM;
 	pI2CHandle->pI2Cx->CR[1] = (tempreg & 0x3F);
@@ -386,7 +384,7 @@ void I2C_Init(I2C_Handle_t *pI2CHandle)
         temp_reg |= (ccr_value & 0xFFF);
     }
     pI2CHandle->pI2Cx->CCR = temp_reg;
-
+    temp_reg = 0;
     // can only configure trise when peripheral is disabled
 
     // Configure TRISE
